@@ -1,187 +1,202 @@
-# LLM Bridge — Turn Any Web Page Into an LLM Provider
+# 🌉 LLM Bridge — Turn Any Web Page into an OpenAI-Compatible LLM Provider
 
-An OpenAI-compatible API bridge powered by Cloudflare Workers Durable Objects. Connect a Chrome extension, register "models" from web pages, and expose them via standard `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, and `/v1/models` endpoints.
+[![CI & Deploy](https://github.com/kelvinzer0/llm-bridge-cf/actions/workflows/deploy.yml/badge.svg)](https://github.com/kelvinzer0/llm-bridge-cf/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20Durable%20Objects-orange?logo=cloudflare)](https://workers.cloudflare.com/)
+[![OpenAI Compatible](https://img.shields.io/badge/OpenAI-API%20Compatible-412991?logo=openai)](https://platform.openai.com/docs)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 
-> **Idea:** Imagine making Google Search, Bing, or any web-based AI into an OpenAI-compatible LLM that any tool can use.
+> **LLM Bridge** transforms any website (Google Search, Bing, social feeds, documentation, internal dashboards) into an **OpenAI-compatible LLM provider** using a lightweight Chrome Extension and Cloudflare Workers with Durable Objects.
 
-## How It Works
+Plug it directly into any OpenAI-compatible client, including **LangChain, LlamaIndex, Cursor, OpenCode, AutoGen, Python/Node SDKs**, or standard `curl`.
 
+---
+
+## 🚀 Key Features
+
+* **⚡ 100% OpenAI API Compatible**:
+  - `POST /v1/chat/completions` (full streaming SSE & non-streaming support)
+  - `POST /v1/responses` (agentic typed SSE events)
+  - `POST /v1/embeddings` (vector generation)
+  - `GET /v1/models` & `GET /v1/models/:id` (dynamic model discovery)
+* **🌐 Web as an LLM**: Turn any active browser tab into an AI reasoning engine (e.g., query Google search results in real time as an LLM).
+* **🔒 Isolated Multi-Tenant Rooms**: Powered by Cloudflare Workers Durable Objects (WebSocket hibernation for zero idle costs).
+* **🔑 Simple Bearer Authentication**: Uses standard `Authorization: Bearer <token>_<roomId>`.
+* **🔄 Dynamic Model Lifecycle**: Automatically registers and unregisters models (`registerModels`) as you browse different web contexts.
+* **✅ Verified in CI**: End-to-end verified on every commit using the **official OpenAI Python SDK**.
+
+---
+
+## 🏛️ Architecture Overview
+
+```text
+┌───────────────────────────┐      WebSocket       ┌─────────────────────────────────┐
+│     Chrome Extension      │ ───────────────────> │   Cloudflare Worker Gateway     │
+│   (Turn Web Pages into    │  registerModels      │       (Durable Objects)         │
+│      an LLM Provider)     │ <─────────────────── │  • Room & Model Registry        │
+│                           │  completionRequest   │  • Request routing & queueing   │
+│  • Google Search          │ ───────────────────> │  • Stream aggregation & SSE     │
+│  • Bing Search            │  stream / response   └─────────────────────────────────┘
+│  • Custom Web Scrapers    │                                        ▲
+└───────────────────────────┘                                        │ OpenAI API (/v1/*)
+                                                                     ▼
+                                                   ┌─────────────────────────────────┐
+                                                   │    Any OpenAI-Compatible Client │
+                                                   │  (Python SDK, Cursor, LangChain)│
+                                                   └─────────────────────────────────┘
 ```
-┌─────────────────┐  WebSocket   ┌──────────────────────┐  OpenAI API  ┌──────────────┐
-│  Web Page        │ ───────────→ │  Cloudflare Worker   │ ←──────────→ │  Any OpenAI  │
-│  (Extension      │  register    │  (Durable Object)    │              │  Client      │
-│   turns page     │  models      │                      │ /v1/chat/    │  (curl,      │
-│   into LLM)      │              │  LLM Bridge          │ completions  │   Python,    │
-│                  │  stream      │  + model registry    │ /v1/models   │   Node.js,   │
-│  process         │  response    │  + request routing   │ /v1/embed    │   etc.)      │
-│  queries         │←─────────────│  forward requests    │              │              │
-└─────────────────┘              └──────────────────────┘              └──────────────┘
-```
 
-## Quick Start
+---
 
-### 1. Deploy
+## ⚡ Quick Start
+
+### 1. Deploy to Cloudflare Workers
+
+Clone the repository and deploy with Wrangler:
 
 ```bash
-git clone https://github.com/kelvinzer0/llm-bridge-cf
+git clone https://github.com/kelvinzer0/llm-bridge-cf.git
 cd llm-bridge-cf
 npm install
 npx wrangler login
 npm run deploy
 ```
 
-### 2. Create a Room
+Live Demo Worker: `https://llm-bridge.insidexofficial.workers.dev`
+
+### 2. Create an Isolated Session Room
+
+Generate a dedicated room and API key:
 
 ```bash
-curl https://llm-bridge.<subdomain>.workers.dev/new
+curl -A "Mozilla/5.0" https://llm-bridge.insidexofficial.workers.dev/new
 ```
 
-Response:
+Example JSON Response:
 ```json
 {
-  "room": "ab1fe4c7",
-  "extension_url": "wss://llm-bridge.<subdomain>.workers.dev/ws/extension?room=ab1fe4c7",
-  "api_base_url": "https://llm-bridge.<subdomain>.workers.dev/v1",
-  "api_key": "a1b2c3d4e5f6g7h8i9j0k1l2_ab1fe4c7",
-  "health_url": "https://llm-bridge.<subdomain>.workers.dev/health?room=ab1fe4c7"
+  "room": "868ff0aa",
+  "extension_url": "wss://llm-bridge.insidexofficial.workers.dev/ws/extension?room=868ff0aa",
+  "api_base_url": "https://llm-bridge.insidexofficial.workers.dev/v1",
+  "api_key": "254f8becef894733bdd4848e_868ff0aa",
+  "health_url": "https://llm-bridge.insidexofficial.workers.dev/health?room=868ff0aa"
 }
 ```
 
-### 3. Load the Extension
+### 3. Load the Browser Extension
 
-1. Open `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked" → select `extension-example/`
-4. Click the extension icon → enter your worker URL → "New Room"
-5. Navigate to google.com — the extension auto-registers `google-search` and `web-extractor` models
+1. Open Chrome and go to `chrome://extensions`.
+2. Enable **Developer mode** (top right).
+3. Click **Load unpacked** and select the [`extension-example/`](./extension-example) directory.
+4. Click the **LLM Bridge** icon in Chrome:
+   - Enter your Worker URL (or click **🚀 New Room**).
+   - Click **Connect**.
+5. Navigate to any page (e.g., `google.com`) — models like `google-search` and `web-extractor` are dynamically registered!
 
-### 4. Use the API
+---
+
+## 💻 Usage with Official OpenAI Python SDK
+
+Install the official OpenAI package:
 
 ```bash
-# List models
-curl https://llm-bridge.<subdomain>.workers.dev/v1/models \
-  -H "Authorization: Bearer YOUR_API_KEY"
-
-# Chat completion
-curl https://llm-bridge.<subdomain>.workers.dev/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "google-search",
-    "messages": [{"role": "user", "content": "What is Cloudflare Workers?"}]
-  }'
-
-# Streaming
-curl https://llm-bridge.<subdomain>.workers.dev/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "google-search",
-    "messages": [{"role": "user", "content": "What is Cloudflare Workers?"}],
-    "stream": true
-  }'
+pip install openai
 ```
 
-### 5. Use with OpenAI Python SDK
+Run standard completions:
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://llm-bridge.<subdomain>.workers.dev/v1",
-    api_key="YOUR_API_KEY",
+    base_url="https://llm-bridge.insidexofficial.workers.dev/v1",
+    api_key="YOUR_API_KEY_HERE"  # format: <token>_<roomId>
 )
 
-# List models
+# 1. List available models discovered from your browser
 models = client.models.list()
-for model in models:
-    print(model.id)
+for model in models.data:
+    print(f"Discovered: {model.id} (owned by {model.owned_by})")
 
-# Chat completion
+# 2. Chat Completion (Non-Streaming)
 response = client.chat.completions.create(
     model="google-search",
-    messages=[{"role": "user", "content": "What is Cloudflare Workers?"}],
+    messages=[{"role": "user", "content": "What are latest developments in quantum computing?"}],
 )
-print(response.choices[0].message.content)
+print("Response:", response.choices[0].message.content)
 
-# Streaming
+# 3. Chat Completion (Streaming SSE)
 stream = client.chat.completions.create(
-    model="web-extractor",
-    messages=[{"role": "user", "content": "Summarize this page"}],
+    model="google-search",
+    messages=[{"role": "user", "content": "Summarize today's tech news"}],
     stream=True,
 )
 for chunk in stream:
-    print(chunk.choices[0].delta.content or "", end="")
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+
+# 4. Generate Embeddings
+embeddings = client.embeddings.create(
+    model="web-extractor",
+    input=["First text sample", "Second text sample"]
+)
+print("Vector length:", len(embeddings.data[0].embedding))
 ```
 
-## API Endpoints
+---
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/new` | GET | Generate new room + API key |
-| `/v1/chat/completions` | POST | Chat completions (OpenAI compatible) |
-| `/v1/responses` | POST | Responses API (OpenAI compatible) |
-| `/v1/embeddings` | POST | Embeddings (OpenAI compatible) |
-| `/v1/models` | GET | List registered models |
-| `/v1/models/:id` | GET | Get single model info |
-| `/ws/extension?room=<id>` | WebSocket | Extension connects here |
-| `/health?room=<id>` | GET | Room status |
+## 📡 REST API Reference
 
-## Authentication
+| Endpoint | Method | Headers | Description |
+|---|---|---|---|
+| `/new` | `GET` | — | Generate new room ID, WebSocket URL, and API key |
+| `/v1/models` | `GET` | `Authorization: Bearer <api_key>` | List all active models in the room |
+| `/v1/models/:id` | `GET` | `Authorization: Bearer <api_key>` | Get specific model metadata |
+| `/v1/chat/completions` | `POST` | `Authorization: Bearer <api_key>` | Chat completions (supports `stream: true/false`) |
+| `/v1/responses` | `POST` | `Authorization: Bearer <api_key>` | OpenAI Responses API with typed events |
+| `/v1/embeddings` | `POST` | `Authorization: Bearer <api_key>` | Create text embeddings |
+| `/ws/extension?room=<id>` | `WebSocket` | — | Chrome extension persistent bridge connection |
+| `/health?room=<id>` | `GET` | — | Check connection state & registered model count |
 
-The API key format is `<token>_<roomId>`:
-- Token part is for authentication
-- Room ID part routes to the correct Durable Object
-- Passed via `Authorization: Bearer <api_key>` header
+---
 
-Example: `Bearer abc123def456_a1b2c3d4` → token=`abc123def456`, room=`a1b2c3d4`
+## 🔄 Protocol: Extension ↔ Cloudflare Worker
 
-## Extension ↔ Bridge Protocol
+### Extension ➔ Worker (WebSocket)
 
-### Extension → Bridge (WebSocket)
+| Type | Payload Sample | Purpose |
+|---|---|---|
+| `registerModels` | `{ "type": "registerModels", "models": [{ "id": "google-search" }] }` | Register active models |
+| `unregisterModels` | `{ "type": "unregisterModels", "ids": ["google-search"] }` | Deregister inactive models |
+| `stream` | `{ "type": "stream", "requestId": "...", "delta": { "content": "..." } }` | Push partial token stream |
+| `response` | `{ "type": "response", "requestId": "...", "content": "...", "usage": {...} }` | Finalize request output |
+| `embedResult` | `{ "type": "embedResult", "requestId": "...", "embeddings": [[...]] }` | Return calculated vectors |
+| `pong` | `{ "type": "pong" }` | Keepalive response |
 
-| Message | Description |
-|---------|-------------|
-| `{ type: "registerModels", models: [...] }` | Register available LLM models |
-| `{ type: "unregisterModels", ids: [...] }` | Remove models |
-| `{ type: "stream", requestId, delta: { content } }` | Stream partial response |
-| `{ type: "response", requestId, content, usage }` | Complete response |
-| `{ type: "streamError", requestId, error }` | Report error |
-| `{ type: "embedResult", requestId, embeddings, usage }` | Return embeddings |
-| `{ type: "pong" }` | Keepalive response |
+### Worker ➔ Extension (WebSocket)
 
-### Bridge → Extension (WebSocket)
+| Type | Payload Sample | Purpose |
+|---|---|---|
+| `completionRequest` | `{ "type": "completionRequest", "requestId": "...", "request": {...} }` | Forward user prompt to extension |
+| `responsesRequest` | `{ "type": "responsesRequest", "requestId": "...", "request": {...} }` | Forward Responses API query |
+| `embeddingRequest` | `{ "type": "embeddingRequest", "requestId": "...", "request": {...} }` | Forward embedding calculation |
+| `ping` | `{ "type": "ping" }` | Health heartbeat |
 
-| Message | Description |
-|---------|-------------|
-| `{ type: "completionRequest", requestId, request }` | Handle chat completion |
-| `{ type: "responsesRequest", requestId, request }` | Handle Responses API |
-| `{ type: "embeddingRequest", requestId, request }` | Handle embedding |
-| `{ type: "ping" }` | Keepalive |
+---
 
-## Context-Aware Models
+## 🧪 CI & Verification
 
-The extension auto-detects the current page and registers appropriate models:
+Every pull request and push to `main` runs automated CI via GitHub Actions:
+1. **TypeScript Typecheck** (`npm run typecheck`)
+2. **Cloudflare Deployment** via `cloudflare/wrangler-action`
+3. **Live E2E Testing** (`test_openai_sdk.py`) validating all endpoints against the official OpenAI Python SDK.
 
-| Page | Model ID | Description |
-|------|----------|-------------|
-| google.com | `google-search` | Searches Google and returns results |
-| bing.com | `bing-search` | Searches Bing and returns results |
-| duckduckgo.com | `duckduckgo-search` | Searches DuckDuckGo |
-| Any page | `web-extractor` | Extracts and returns page content |
+---
 
-## Development
+## 📜 Derived From & Attribution
 
-```bash
-npm run dev       # Local dev with wrangler
-npm run typecheck # Type checking
-npm run deploy    # Deploy to Cloudflare
-```
+Derived and re-architected from [mcp-bridge-cf](https://github.com/kelvinzer0/mcp-bridge-cf). While MCP Bridge routes Model Context Protocol tool calls, **LLM Bridge** translates browser interactions into a standardized **OpenAI LLM Provider**.
 
-## Derived From
+## 📄 License
 
-This project is derived from [mcp-bridge-cf](https://github.com/kelvinzer0/mcp-bridge-cf), transforming the MCP protocol bridge into an OpenAI-compatible LLM API bridge.
-
-## License
-
-MIT
+[MIT](LICENSE) © 2026 [Kelvin Andrian](https://github.com/kelvinzer0)
