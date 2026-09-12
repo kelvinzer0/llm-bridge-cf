@@ -31,10 +31,30 @@ export interface StreamMessage {
   delta: { content: string; role?: string }
 }
 
+export interface ToolCall {
+  id: string
+  type: "function"
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+export interface ToolDefinition {
+  type: "function"
+  function: {
+    name: string
+    description?: string
+    parameters?: Record<string, unknown>
+  }
+}
+
 export interface ResponseMessage {
   type: "response"
   requestId: string
-  content: string
+  content?: string | null
+  tool_calls?: ToolCall[]
+  finish_reason?: string
   usage?: UsageInfo
 }
 
@@ -97,14 +117,18 @@ export type WorkerMessage =
 // ── OpenAI Chat Completions ─────────────────────────────────────────
 
 export interface ChatMessage {
-  role: "system" | "user" | "assistant" | "developer"
-  content: string
+  role: "system" | "user" | "assistant" | "developer" | "tool"
+  content?: string | null
   name?: string
+  tool_calls?: ToolCall[]
+  tool_call_id?: string
 }
 
 export interface ChatCompletionRequest {
   model: string
   messages: ChatMessage[]
+  tools?: ToolDefinition[]
+  tool_choice?: unknown
   temperature?: number
   top_p?: number
   max_tokens?: number
@@ -119,8 +143,12 @@ export interface ChatCompletionRequest {
 
 export interface ChatCompletionChoice {
   index: number
-  message: { role: "assistant"; content: string }
-  finish_reason: "stop" | "length" | "content_filter" | null
+  message: {
+    role: "assistant"
+    content: string | null
+    tool_calls?: ToolCall[]
+  }
+  finish_reason: "stop" | "length" | "content_filter" | "tool_calls" | null
 }
 
 export interface ChatCompletionResponse {
@@ -134,8 +162,12 @@ export interface ChatCompletionResponse {
 
 export interface ChatCompletionChunkChoice {
   index: number
-  delta: { role?: string; content?: string }
-  finish_reason: "stop" | "length" | "content_filter" | null
+  delta: {
+    role?: string
+    content?: string | null
+    tool_calls?: ToolCall[]
+  }
+  finish_reason: "stop" | "length" | "content_filter" | "tool_calls" | null
 }
 
 export interface ChatCompletionChunk {

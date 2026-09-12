@@ -212,12 +212,17 @@ export class LLMBridge extends DurableObject {
               await p.writer.close()
             } else {
               // Chat Completions: send final chunk with finish_reason
+              const finishReason = msg.finish_reason || (msg.tool_calls && msg.tool_calls.length > 0 ? "tool_calls" : "stop")
               const finalChunk: ChatCompletionChunk = {
                 id: p.completionId!,
                 object: "chat.completion.chunk",
                 created: p.created!,
                 model: p.model!,
-                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+                choices: [{
+                  index: 0,
+                  delta: msg.tool_calls ? { tool_calls: msg.tool_calls } : {},
+                  finish_reason: finishReason as any,
+                }],
               }
               await p.writer.write(p.encoder.encode(`data: ${JSON.stringify(finalChunk)}\n\n`))
               await p.writer.write(p.encoder.encode(`data: [DONE]\n\n`))
@@ -227,6 +232,8 @@ export class LLMBridge extends DurableObject {
             // Non-streaming: resolve the promise with a full response
             p.resolve({
               content: finalContent,
+              tool_calls: msg.tool_calls,
+              finish_reason: msg.finish_reason,
               usage: msg.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
             })
           }
@@ -361,7 +368,12 @@ export class LLMBridge extends DurableObject {
     } else {
       // ── Non-streaming response ──
       try {
-        const result = await new Promise<{ content: string; usage: UsageInfo }>((resolve, reject) => {
+        const result = await new Promise<{
+          content: string
+          tool_calls?: ToolCall[]
+          finish_reason?: string
+          usage: UsageInfo
+        }>((resolve, reject) => {
           this.pendingRequests.set(requestId, {
             resolve,
             reject,
@@ -377,12 +389,23 @@ export class LLMBridge extends DurableObject {
           })
         })
 
+        const hasToolCalls = Array.isArray(result.tool_calls) && result.tool_calls.length > 0
+        const finishReason = (result.finish_reason || (hasToolCalls ? "tool_calls" : "stop")) as any
+
         const response: ChatCompletionResponse = {
           id: completionId,
           object: "chat.completion",
           created,
           model: body.model,
-          choices: [{ index: 0, message: { role: "assistant", content: result.content }, finish_reason: "stop" }],
+          choices: [{
+            index: 0,
+            message: {
+              role: "assistant",
+              content: hasToolCalls ? (result.content || null) : result.content,
+              ...(hasToolCalls ? { tool_calls: result.tool_calls } : {}),
+            },
+            finish_reason: finishReason,
+          }],
           usage: result.usage,
         }
         return Response.json(response)
