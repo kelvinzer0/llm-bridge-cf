@@ -9,7 +9,7 @@ import type {
   ChatCompletionRequest, ChatCompletionResponse, ChatCompletionChunk,
   EmbeddingRequest, EmbeddingResponse,
   ResponsesAPIRequest, ResponsesAPIResponse, ResponsesOutputItem, ResponsesContentPart,
-  UsageInfo, OpenAIError,
+  UsageInfo, OpenAIError, ToolCall, ToolDefinition,
 } from "./types"
 
 interface PendingRequest {
