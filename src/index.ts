@@ -32,8 +32,10 @@ function parseAuth(request: Request): { token: string; room: string } | null {
 /** Standard CORS headers */
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Accept, Authorization, OpenAI-Organization, OpenAI-Project",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Expose-Headers": "*",
+  "Access-Control-Max-Age": "86400",
 }
 
 export default {
