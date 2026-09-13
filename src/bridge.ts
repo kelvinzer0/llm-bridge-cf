@@ -345,7 +345,7 @@ export class LLMBridge extends DurableObject {
           writer.write(encoder.encode(`data: ${JSON.stringify({ error: { message: "Timeout" } })}\n\n`)).catch(() => {})
           writer.write(encoder.encode(`data: [DONE]\n\n`)).catch(() => {})
           writer.close().catch(() => {})
-        }, 120_000),
+        }, 300_000),
         writer,
         encoder,
         model: body.model,
@@ -381,7 +381,7 @@ export class LLMBridge extends DurableObject {
             timer: setTimeout(() => {
               this.pendingRequests.delete(requestId)
               reject(new Error("Timeout"))
-            }, 120_000),
+            }, 300_000),
             model: body.model,
             completionId,
             created,
@@ -487,7 +487,7 @@ export class LLMBridge extends DurableObject {
         timer: setTimeout(() => {
           this.pendingRequests.delete(requestId)
           writer.close().catch(() => {})
-        }, 120_000),
+        }, 300_000),
         writer,
         encoder,
         model: body.model,
@@ -525,7 +525,7 @@ export class LLMBridge extends DurableObject {
             timer: setTimeout(() => {
               this.pendingRequests.delete(requestId)
               reject(new Error("Timeout"))
-            }, 120_000),
+            }, 300_000),
             streaming: false,
             fullContent: "",
           })
