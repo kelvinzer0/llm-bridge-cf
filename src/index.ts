@@ -70,7 +70,13 @@ export default {
     let room: string | null = null
 
     // API endpoints use Bearer token
-    if (url.pathname.startsWith("/v1/")) {
+    if (
+      url.pathname.startsWith("/v1/") ||
+      url.pathname.startsWith("/chat/") ||
+      url.pathname.startsWith("/responses") ||
+      url.pathname.startsWith("/models") ||
+      url.pathname.startsWith("/embeddings")
+    ) {
       const auth = parseAuth(request)
       if (!auth) {
         return Response.json({

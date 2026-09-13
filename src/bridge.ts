@@ -85,24 +85,24 @@ export class LLMBridge extends DurableObject {
 
     // ── OpenAI-compatible API routes ──
 
-    // POST /v1/chat/completions
-    if ((url.pathname === "/v1/chat/completions" || url.pathname.endsWith("/v1/chat/completions")) && request.method === "POST") {
+    // POST /v1/chat/completions or /chat/completions
+    if ((url.pathname === "/v1/chat/completions" || url.pathname === "/chat/completions" || url.pathname.endsWith("/chat/completions")) && request.method === "POST") {
       return this.handleCompletions(request)
     }
 
-    // POST /v1/responses
-    if ((url.pathname === "/v1/responses" || url.pathname.endsWith("/v1/responses")) && request.method === "POST") {
+    // POST /v1/responses or /responses
+    if ((url.pathname === "/v1/responses" || url.pathname === "/responses" || url.pathname.endsWith("/responses")) && request.method === "POST") {
       return this.handleResponses(request)
     }
 
-    // POST /v1/embeddings
-    if ((url.pathname === "/v1/embeddings" || url.pathname.endsWith("/v1/embeddings")) && request.method === "POST") {
+    // POST /v1/embeddings or /embeddings
+    if ((url.pathname === "/v1/embeddings" || url.pathname === "/embeddings" || url.pathname.endsWith("/embeddings")) && request.method === "POST") {
       return this.handleEmbeddings(request)
     }
 
-    // GET /v1/models or /v1/models/:id
-    if (url.pathname.match(/\/v1\/models(\/.*)?$/) && request.method === "GET") {
-      const modelIdMatch = url.pathname.match(/\/v1\/models\/(.+)$/)
+    // GET /v1/models or /models or /v1/models/:id
+    if ((url.pathname.match(/\/(?:v1\/)?models(\/.*)?$/)) && request.method === "GET") {
+      const modelIdMatch = url.pathname.match(/\/(?:v1\/)?models\/(.+)$/)
       if (modelIdMatch) {
         return this.handleRetrieveModel(modelIdMatch[1])
       }
@@ -301,7 +301,8 @@ export class LLMBridge extends DurableObject {
 
     if (!body.model) return this.errorResponse("'model' is required", 400)
     if (!body.messages || !Array.isArray(body.messages)) return this.errorResponse("'messages' is required", 400)
-    if (!this.models.has(body.model)) return this.errorResponse(`Model '${body.model}' not found`, 404)
+    const resolvedModel = this.resolveModelId(body.model)
+    if (!resolvedModel) return this.errorResponse(`Model '${body.model}' not found`, 404)
 
     const activeWs = this.getActiveWs()
     if (!activeWs) return this.errorResponse("Extension not connected", 503)
@@ -425,7 +426,8 @@ export class LLMBridge extends DurableObject {
 
     if (!body.model) return this.errorResponse("'model' is required", 400)
     if (!body.input) return this.errorResponse("'input' is required", 400)
-    if (!this.models.has(body.model)) return this.errorResponse(`Model '${body.model}' not found`, 404)
+    const resolvedModel = this.resolveModelId(body.model)
+    if (!resolvedModel) return this.errorResponse(`Model '${body.model}' not found`, 404)
 
     const activeWs = this.getActiveWs()
     if (!activeWs) return this.errorResponse("Extension not connected", 503)
@@ -564,7 +566,8 @@ export class LLMBridge extends DurableObject {
 
     if (!body.model) return this.errorResponse("'model' is required", 400)
     if (!body.input) return this.errorResponse("'input' is required", 400)
-    if (!this.models.has(body.model)) return this.errorResponse(`Model '${body.model}' not found`, 404)
+    const resolvedModel = this.resolveModelId(body.model)
+    if (!resolvedModel) return this.errorResponse(`Model '${body.model}' not found`, 404)
 
     const activeWs = this.getActiveWs()
     if (!activeWs) return this.errorResponse("Extension not connected", 503)
@@ -619,8 +622,20 @@ export class LLMBridge extends DurableObject {
     return Response.json(response)
   }
 
+  private resolveModelId(rawId: string): string | null {
+    if (!rawId) return null
+    if (this.models.has(rawId)) return rawId
+    const cleanId = rawId.includes("/") ? rawId.split("/").pop()!.toLowerCase().trim() : rawId.toLowerCase().trim()
+    if (this.models.has(cleanId)) return cleanId
+    for (const [id] of this.models) {
+      if (id.toLowerCase() === cleanId || id.toLowerCase() === rawId.toLowerCase()) return id
+    }
+    return null
+  }
+
   private handleRetrieveModel(modelId: string): Response {
-    const m = this.models.get(modelId)
+    const resolved = this.resolveModelId(modelId)
+    const m = resolved ? this.models.get(resolved) : null
     if (!m) return this.errorResponse(`Model '${modelId}' not found`, 404)
     const obj: ModelObject = {
       id: m.id,
